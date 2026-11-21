@@ -1,0 +1,12 @@
+{
+  "about": "The kinds of question agents answer by hand about Claude Code's configuration with cat, jq and rg in settings files, ~/.claude.json, .mcp.json, hooks, plugins and mods: which hook runs before a tool call and what script it runs, what the status line command is and which layer sets it, which permission rule lets a command run, which MCP servers are configured in which scope, which settings files are invalid. Each is put to one of two small project folders that bench/make-fixture.sh builds from bench/templates into bench/fixtures (run it once before the bench): watch-house holds project settings, local settings, a hook and an .mcp.json; broken-house holds an empty settings file and a settings file with a JSON syntax error. The folders are named by path relative to the kit folder, because the kit otherwise answers about the repository the agent works in. The caller's own user settings, plugins and mods are read as well and differ on every machine, so each question asks about the project's files.",
+  "questions": [
+    { "id": "hook-before-bash", "q": "In bench/fixtures/watch-house, which project hook runs before every Bash tool call, which settings file configures it, and what script does it run?", "expect": ["check-rota\\.sh", "PreToolUse", "settings\\.json"] },
+    { "id": "statusline", "q": "In bench/fixtures/watch-house, what is the status line command, and which settings layer sets it?", "expect": ["watch-status", "project|settings\\.json"] },
+    { "id": "mcp-scopes", "q": "In bench/fixtures/watch-house, is an MCP server named ledger configured, in which scope, and what command does it run?", "expect": ["ledger", "project", "node"] },
+    { "id": "which-permission", "q": "In bench/fixtures/watch-house, which permission rule lets `git push origin main` run without a prompt, and which file holds it?", "expect": ["git push \\*", "settings\\.local\\.json"] },
+    { "id": "broken-settings", "q": "Are any settings files in bench/fixtures/broken-house invalid?", "expect": ["settings\\.json", "settings\\.local\\.json", "empty|invalid|0 bytes"] },
+    { "id": "would-fire-shot", "do": "hooks", "params": { "folder": "bench/fixtures/watch-house", "event": "PreToolUse", "tool": "Bash", "command": "git commit -m x" }, "expect": ["check-rota\\.sh", "fires"] },
+    { "id": "check-shot", "do": "check", "params": { "folder": "bench/fixtures/broken-house" }, "expect": ["\"error\": 2", "empty file", "settings\\.local\\.json"] }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "ledger": { "command": "node", "args": ["ledger-server.mjs"] }
+  }
+}

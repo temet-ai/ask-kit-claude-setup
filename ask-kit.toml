@@ -1,0 +1,28 @@
+id = "temet.claude-setup"
+name = "claude-setup"
+version = "0.1.0"
+min_ask_kit = "0.2.0"
+says = "how Claude Code is configured on this machine and for the current repository, as it is now: which hooks are configured, on which events and matchers, from which settings file or plugin, what each runs, and which would fire for a tool call or event; which permissions are allowed, asked or denied, where each rule comes from and which rule decides a call; which MCP servers are configured (user, project, plugin) and whether their program exists; which plugins and marketplaces are installed and enabled; which settings, env variable names, model, effort, status line are in force after the layers merge and which layer won; which mods are installed and loaded; and acting on it (add, change or remove a hook, a permission rule, an MCP server, an env variable or a setting, with a backup and a JSON check)"
+keywords = ["hooks?", "settings\\.json", "settings\\.local\\.json", "\\.mcp\\.json", "permissions?", "allow(ed)? rules?", "mcp servers?", "plugins?", "marketplaces?", "mods?", "statusline", "matchers?", "PreToolUse", "PostToolUse", "SessionStart", "enabledPlugins", "claude\\.json"]
+route_hint = "what Claude Code is configured to do on this machine (hooks, permission rules, MCP servers, plugins, mods, settings and env after the layers merge) and changing it are claude-setup; CLAUDE.md, rules and memory files are rules; skills and agents are skills; how a Claude Code feature works in general, or what a setting or hook event means, is claude-code-docs; what a past session did or why a hook fired in it is mike or sessions; the repository's own code is code; app settings under ~/.config are dotfiles"
+cite = "`file` and the key (permissions.allow[3], hooks.PreToolUse[0]) with the scope (user, project, local, managed, plugin)"
+instructions = "instructions.md"
+acts = ["setup.addHook", "setup.removeHook", "setup.set", "setup.unset", "setup.addPermission", "setup.removePermission", "setup.addMcp", "setup.removeMcp", "setup.setPlugin", "setup.testHook"]
+
+[[sources]]
+kind = "module"
+name = "setup"
+module = "setup.mjs"
+api = "api.d.ts"
+
+[[roles]]
+name = "inspector"
+when = "a question about what is configured in Claude Code: which hooks, permission rules, MCP servers, plugins, mods or settings apply, where a value comes from, why a hook fired or would fire, which rule allows or blocks a call"
+patterns = ["\\b(which|what|where|why|is|are|does|do)\\b.*\\b(hooks?|permissions?|allow(ed)?|denied|mcp|plugins?|marketplaces?|mods?|settings?|statusline|env)\\b"]
+instructions = "roles/inspector.md"
+
+[[roles]]
+name = "configurer"
+when = "a request to add, change, move or remove a hook, a permission rule, an MCP server, a plugin setting, an env variable or another Claude Code setting, or to make something happen automatically from now on"
+patterns = ["^(please )?(add|allow|deny|block|remove|disable|enable|set|change|move|install)\\b.*\\b(hooks?|permissions?|rules?|mcp|plugin|setting|env|statusline)\\b", "\\bfrom now on\\b", "\\bwhenever\\b"]
+instructions = "roles/configurer.md"
