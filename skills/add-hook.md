@@ -31,9 +31,18 @@ Add a Claude Code hook: choose the event, write the matcher, put the script in t
 6. Add it: `await setup.addHook({ scope, event, matcher, command, timeout })`. Read the result:
    `warnings` names a missing or non-executable script; `action: "already present"` means it
    existed.
-7. Test it. `await setup.testHook({ event, command, tool, input })` runs the command with a
-   sample event and returns exit code, output and how Claude Code reads it. It refuses a command
+7. Test it. `await setup.testHook({ event, command, tool, input, fields })` runs the command with a
+   sample event (`input` is the tool_input, `fields` adds any other stdin field) and returns exit
+   code, output and how Claude Code reads it. It refuses a command
    with a pipe or redirect: test the script by path. Then `scripts.run("hooks", { event, tool,
    command })` shows it among the hooks that would fire.
-8. Run `scripts.run("check")`. Settings changes load in running sessions through the file watcher;
-   a hook in a project folder a person has not trusted does not run until they accept the prompt.
+8. Run `scripts.run("validate-hooks")` for the hooks block and `scripts.run("check")` for the rest.
+   Settings changes load in running sessions through the file watcher; a hook in a project folder a
+   person has not trusted does not run until they accept the prompt.
+
+Worked hooks for common jobs: `skills.read("block-tool-call")` (deny a write or a command),
+`skills.read("auto-approve-permission")`, `skills.read("gate-stop")` (Stop, SubagentStop,
+TaskCompleted), `skills.read("inject-context")` (SessionStart, CLAUDE_ENV_FILE, PostToolUse hints),
+`skills.read("failure-hints")`, `skills.read("check-after-edit")`, `skills.read("log-prompts")` and
+`skills.read("one-script-many-events")`. Each gives the event, matcher, stdin JSON, stdout JSON and a
+script to save.

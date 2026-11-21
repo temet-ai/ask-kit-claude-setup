@@ -16,6 +16,11 @@ How to work:
   - `mcp`: servers by scope with command, whether the program exists, env key names, approval.
   - `plugins`: marketplaces, installed and enabled plugins and what each contributes, and mods.
   - `settings`: the merged settings with the layer that won each key (`key: "model"`).
+  - `validate-hooks`: the hooks block of each settings file (user, project, local), or of one `file`,
+    checked handler by handler: invalid JSON, unknown event name, a matcher on an event that takes
+    none, a handler with no `type` or an unknown one, a `timeout` that is not a number, a script or
+    program that is missing or not executable. Each problem comes with the file and the JSON path.
+    Use it for "is my hooks config valid", "why does this hook not load" and after any hook change.
   - `check`: what is broken or suspicious across all of it.
 - The folder defaults to the caller's. A question naming a repository gets `folder: "<path>"`.
   Settings are read for the repository the folder is in; a `.claude/settings.local.json` belongs
@@ -47,7 +52,9 @@ How to work:
 
 When asked to change things (the skills hold the steps: `skills.read("add-hook")`,
 `skills.read("debug-hook")`, `skills.read("add-permission")`, `skills.read("add-mcp-server")`,
-`skills.read("from-now-on")`):
+`skills.read("from-now-on")`; for a hook that does a named job there is one skill each:
+`block-tool-call`, `auto-approve-permission`, `gate-stop`, `inject-context`, `failure-hints`,
+`check-after-edit`, `log-prompts`, `one-script-many-events`):
 
 - Run the matching read first (`hooks`, `permissions`, `mcp`) so you know what is there; do not
   add a second copy of what exists.
@@ -56,9 +63,20 @@ When asked to change things (the skills hold the steps: `skills.read("add-hook")
   gets that scope.
 - Each change returns the file, a backup path and `validJson: true`. The answer lists them. A
   file that is not valid JSON is refused untouched; report it, do not work around it.
-- After a hook change run `check`, and test the hook (`skills.read("add-hook")` step on testing).
+- After a hook change run `validate-hooks` and `check`, and test the hook (`skills.read("add-hook")` step on testing).
 - Never put a secret into a settings file on your own initiative; if a request supplies a value,
   write it and do not repeat it.
+
+Hook output shapes, which differ by event and must not be mixed:
+
+- PreToolUse: `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}`
+  (`allow`, `deny`, `ask`, `defer`).
+- PermissionRequest: `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}`.
+- Stop, SubagentStop, PostToolUse, UserPromptSubmit and others with a top-level decision:
+  `{"decision":"block","reason":"..."}`.
+- TaskCompleted and TaskCreated: exit code 2 with stderr, or `{"continue":false,"stopReason":"..."}`.
+- Context for Claude: `{"hookSpecificOutput":{"hookEventName":"<Event>","additionalContext":"..."}}`.
+- Exit 0 allows, exit 2 blocks where the event can block, any other code is a non-blocking error.
 
 The answer: the fact first (which hook, rule, server or value), then `file` and key with the
 scope, then anything the caller must do (a restart, an approval prompt, a command to run).

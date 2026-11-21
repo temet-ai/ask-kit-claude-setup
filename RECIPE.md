@@ -53,6 +53,10 @@ then allow; compound Bash commands part by part; path anchors `//`, `~/`, `/`, `
 managed), `plugins`, `mods` (loaded through `CLAUDE_CODE_PLUGIN_DIRS`), `check`, and `cli` (text
 of `claude` commands). The changing calls refuse without `act`, refuse files other than
 `settings.json`, `settings.local.json` and `.mcp.json`, refuse invalid JSON, back up, write a temp
-file and rename, re-read, and restore on failure. Six scripts (`hooks`, `permissions`, `mcp`,
-`plugins`, `settings`, `check`) return compact lines. Five skills: `add-hook`, `debug-hook`,
-`add-permission`, `add-mcp-server`, `from-now-on`. Describe the client exactly in `api.d.ts`.
+file and rename, re-read, and restore on failure. `validateHooks` reads each settings file's hooks block, or one `file`, and returns each problem with
+file and JSON path (unknown event, matcher on an event with none, missing or unknown handler type,
+timeout not a number, `if` on an event that ignores it, missing or non-executable script, program not
+on PATH). Seven scripts (`hooks`, `permissions`, `mcp`, `plugins`, `settings`, `check`,
+`validate-hooks`) return compact lines. Thirteen skills: `add-hook`, `debug-hook`, `add-permission`,
+`add-mcp-server`, `from-now-on`, and `block-tool-call`, `auto-approve-permission`, `gate-stop`,
+`inject-context`, `failure-hints`, `check-after-edit`, `log-prompts`, `one-script-many-events`. Describe the client exactly in `api.d.ts`.

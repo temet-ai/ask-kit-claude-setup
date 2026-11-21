@@ -987,6 +987,128 @@ export function makeSetup({ cwd, push = () => {}, act = false, home = home0(), m
     return { folder: L.folder, counts, problems: probs.slice(0, o.max ?? 80), cut: Math.max(0, probs.length - (o.max ?? 80)), checked: { layers: L.layers.filter((l) => l.exists).length, hooks: hs._rows.length, permissionRules: rules.length, mcpServers: M.servers.length, plugins: PL.plugins.length, mods: PL.mods.mods.length } };
   }
 
+  // ---------- hooks validation ----------
+
+  /**
+   * The hooks block of each settings file that applies (user, project, local, and managed when present), or of one `file`,
+   * checked one handler at a time. Every problem carries the file and the JSON path. Reads only.
+   */
+  function validateHooks(o = {}) {
+    const L = layers(o);
+    let files = L.layers.filter((l) => l.exists || l.scope !== "managed");
+    if (o.file) {
+      const f = path.resolve(L.folder, String(o.file).replace(/^~(?=\/|$)/, home));
+      const base = path.basename(f);
+      if (!/\.json$/i.test(base) || /credential|secret|token/i.test(base) || path.resolve(f) === path.join(home, ".claude.json")) fail(`validateHooks reads settings-style .json files only, and not credentials or ~/.claude.json: ${base}`);
+      files = [{ scope: "file", ...readJson(f) }];
+    }
+    const vars = { HOME: home, CLAUDE_PROJECT_DIR: L.root };
+    const rel = (p) => (p.startsWith(L.root + "/") ? p.slice(L.root.length + 1) : sh(p));
+    const probs = [];
+    const summary = [];
+    let handlers = 0;
+    for (const l of files) {
+      const file = l.scope !== "user" ? rel(l.path) : sh(l.path);
+      const P = (severity, jpath, problem) => probs.push({ severity, scope: l.scope, file, path: jpath, problem });
+      const row = { scope: l.scope, file, state: "", events: 0, handlers: 0 };
+      summary.push(row);
+      if (!l.exists) {
+        row.state = "absent";
+        continue;
+      }
+      if (!l.valid) {
+        row.state = "invalid JSON";
+        P("error", "(file)", l.error);
+        continue;
+      }
+      if (l.data.disableAllHooks === true) P("warn", "disableAllHooks", "true: user, project, local and plugin hooks are all off while this is set");
+      else if (l.data.disableAllHooks !== undefined && typeof l.data.disableAllHooks !== "boolean") P("error", "disableAllHooks", `must be true or false, got ${typeof l.data.disableAllHooks}`);
+      if (l.data.hooks === undefined) {
+        row.state = "no hooks block";
+        continue;
+      }
+      if (!isObj(l.data.hooks)) {
+        row.state = "hooks is not an object";
+        P("error", "hooks", `must be an object with event names as keys, got ${Array.isArray(l.data.hooks) ? "an array" : typeof l.data.hooks}`);
+        continue;
+      }
+      for (const [event, groups] of Object.entries(l.data.hooks)) {
+        row.events++;
+        const ev = `hooks.${maskString(event).slice(0, 60)}`;
+        if (!EVENTS.includes(event)) {
+          const near = EVENTS.find((e) => e.toLowerCase() === event.toLowerCase());
+          P("error", ev, `unknown event name${near ? `, did you mean ${near}` : ""} (names are case-sensitive; setup.events lists the valid ones)`);
+          continue;
+        }
+        if (!Array.isArray(groups)) {
+          P("error", ev, `must be an array of matcher groups, got ${isObj(groups) ? "an object" : typeof groups}`);
+          continue;
+        }
+        groups.forEach((g, gi) => {
+          const gp = `${ev}[${gi}]`;
+          if (!isObj(g)) return P("error", gp, "a matcher group must be an object with a hooks array");
+          if (g.matcher !== undefined) {
+            if (typeof g.matcher !== "string") P("error", `${gp}.matcher`, `must be a string, got ${Array.isArray(g.matcher) ? "an array" : typeof g.matcher}`);
+            else if (NO_MATCHER.has(event) && g.matcher !== "") P("warn", `${gp}.matcher`, `${event} takes no matcher: it is ignored and the hook fires on every ${event}`);
+            else if (!NO_MATCHER.has(event)) {
+              const mt = matcherTest(event, g.matcher, "x");
+              if (mt.invalid) P("error", `${gp}.matcher`, mt.invalid);
+              else if (TOOL_EVENTS.has(event) && /^mcp__/.test(g.matcher) && /^[A-Za-z0-9_\-\s,|]+$/.test(g.matcher) && !/^mcp__.+__.+/.test(g.matcher)) P("warn", `${gp}.matcher`, "a bare mcp__<server> is an exact name and matches no tool; a whole server needs mcp__<server>__.*");
+            }
+          }
+          if (!Array.isArray(g.hooks)) return P("error", `${gp}.hooks`, `must be an array of handlers, got ${g.hooks === undefined ? "nothing" : isObj(g.hooks) ? "an object" : typeof g.hooks}`);
+          g.hooks.forEach((h, hi) => {
+            const hp = `${gp}.hooks[${hi}]`;
+            handlers++;
+            row.handlers++;
+            if (!isObj(h)) return P("error", hp, "a handler must be an object");
+            if (h.type === undefined) P("error", `${hp}.type`, "missing: every handler needs a type (command, http, mcp_tool, prompt or agent)");
+            else if (!HANDLER_TYPES.has(h.type)) P("error", `${hp}.type`, `unknown type ${maskString(JSON.stringify(h.type)).slice(0, 40)}: must be command, http, mcp_tool, prompt or agent`);
+            if (h.timeout !== undefined) {
+              if (typeof h.timeout !== "number" || !Number.isFinite(h.timeout) || h.timeout <= 0) P("error", `${hp}.timeout`, `must be a positive number of seconds, got ${typeof h.timeout === "number" ? "a number that is not above 0" : typeof h.timeout}`);
+              else if (h.timeout >= 1000) P("warn", `${hp}.timeout`, `${h.timeout} seconds is over 16 minutes: timeout is in seconds, not milliseconds`);
+            }
+            if (h.if !== undefined) {
+              if (typeof h.if !== "string") P("error", `${hp}.if`, "must be one permission rule as a string");
+              else if (/&&|\|\|/.test(h.if)) P("error", `${hp}.if`, "holds one permission rule: && and || are not supported (use one handler per condition)");
+              if (!TOOL_EVENTS.has(event)) P("error", `${hp}.if`, `${event} never evaluates if, so this hook never runs (if works on PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest and PermissionDenied)`);
+            }
+            if (h.async !== undefined) {
+              if (typeof h.async !== "boolean") P("error", `${hp}.async`, "must be true or false");
+              else if (h.async && h.type !== undefined && h.type !== "command") P("warn", `${hp}.async`, "async runs command hooks only");
+            }
+            if (h.once !== undefined) P("info", `${hp}.once`, "once is honoured only for hooks in skill frontmatter; here it is ignored");
+            if (h.type === "command") {
+              if (typeof h.command !== "string" || !h.command.trim()) return P("error", `${hp}.command`, "a command handler needs a non-empty command string");
+              if (h.args !== undefined && !(Array.isArray(h.args) && h.args.every((x) => typeof x === "string"))) return P("error", `${hp}.args`, "must be an array of strings");
+              const t = commandTarget(h.command, h.args ?? null, vars, L.root);
+              if (t?.script && !t.unresolved) {
+                if (!t.exists) P("error", `${hp}.command`, `script not found: ${rel(t.script)}`);
+                else if (t.runsDirectly && !t.executable) P("error", `${hp}.command`, `script is not executable: ${rel(t.script)} (chmod +x it, or run it through an interpreter)`);
+              } else if (t?.program && !t.onPath) P("error", `${hp}.command`, `program not found on PATH: ${t.program}`);
+              else if (t?.interpreter && t.interpreterOnPath === false) P("error", `${hp}.command`, `interpreter not found on PATH: ${t.interpreter}`);
+            } else if (h.type === "http") {
+              if (typeof h.url !== "string" || !/^https?:\/\//i.test(h.url)) P("error", `${hp}.url`, "an http handler needs a url starting with http:// or https://");
+            } else if (h.type === "mcp_tool") {
+              for (const k of ["server", "tool"]) if (typeof h[k] !== "string" || !h[k]) P("error", `${hp}.${k}`, `an mcp_tool handler needs a ${k} name`);
+            } else if (h.type === "prompt" || h.type === "agent") {
+              if (typeof h.prompt !== "string" || !h.prompt.trim()) P("error", `${hp}.prompt`, `a ${h.type} handler needs a prompt string`);
+            }
+          });
+        });
+      }
+      const mine = probs.filter((p) => p.file === file);
+      const bad = mine.filter((p) => p.severity !== "info").length;
+      row.state = bad ? `${bad} problem${bad === 1 ? "" : "s"}` : "ok";
+    }
+    const order = { error: 0, warn: 1, info: 2 };
+    probs.sort((a, b) => order[a.severity] - order[b.severity]);
+    const counts = { error: 0, warn: 0, info: 0 };
+    for (const p of probs) counts[p.severity]++;
+    const max = o.max ?? 80;
+    return { folder: L.folder, files: summary, handlersChecked: handlers, counts, problems: probs.slice(0, max), cut: Math.max(0, probs.length - max) };
+  }
+
   // ---------- commands for what lives only in ~/.claude.json ----------
 
   /** The `claude` command to run for something this client does not write (user and local MCP servers, plugin install, marketplaces). Returns text only; nothing runs. */
@@ -1287,7 +1409,7 @@ export function makeSetup({ cwd, push = () => {}, act = false, home = home0(), m
     Notification: (o) => ({ message: "test", notification_type: o.tool ?? "idle_prompt" }),
     Stop: () => ({ stop_hook_active: false }),
   };
-  /** Run one hook command with a sample event on stdin and report exit code, output and how Claude Code reads it. o: event, command (+args), tool, input, timeout. No shell: a command with pipes or redirects is refused. */
+  /** Run one hook command with a sample event on stdin and report exit code, output and how Claude Code reads it. o: event, command (+args), tool, input, fields (extra stdin fields for any event, such as stop_hook_active, tool_name, error, agent_type), timeout. No shell: a command with pipes or redirects is refused. */
   function testHook(o = {}) {
     needAct("testHook");
     if (!EVENTS.includes(o.event)) fail(`unknown event ${o.event}`);
@@ -1300,7 +1422,7 @@ export function makeSetup({ cwd, push = () => {}, act = false, home = home0(), m
     while (argv.length && /^[A-Za-z_]\w*=/.test(argv[0])) argv.shift();
     const prog = argv.shift();
     if (!prog) fail("empty command");
-    const input = { session_id: "claude-setup-test", transcript_path: path.join(os.tmpdir(), "none.jsonl"), cwd: root, permission_mode: "default", hook_event_name: o.event, ...(SAMPLE[o.event]?.(o) ?? {}) };
+    const input = { session_id: "claude-setup-test", transcript_path: path.join(os.tmpdir(), "none.jsonl"), cwd: root, permission_mode: "default", hook_event_name: o.event, ...(SAMPLE[o.event]?.(o) ?? {}), ...(isObj(o.fields) ? o.fields : {}) };
     const t0 = Date.now();
     return new Promise((resolve) => {
       const child = execFile(prog, argv, { cwd: root, timeout: Math.min((o.timeout ?? 10), 30) * 1000, maxBuffer: 1 << 20, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: root, CLAUDE_CODE_SESSION_ID: input.session_id } }, (err, stdout, stderr) => {
@@ -1339,6 +1461,7 @@ export function makeSetup({ cwd, push = () => {}, act = false, home = home0(), m
     plugins,
     mods: (o) => mods(o),
     check,
+    validateHooks,
     cli,
     matcherTest,
     ruleMatches: (rule, call, kind = "allow") => ruleMatches(rule, call, kind, { home, cwd, ruleRoot: cwd }),

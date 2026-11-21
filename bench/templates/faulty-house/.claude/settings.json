@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "pretooluse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "echo checked", "timeout": 5 }] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "command": "echo missing-type" },
+          { "type": "script", "command": "echo wrong-type" },
+          { "type": "command", "command": "echo slow", "timeout": "5000" },
+          { "type": "command", "command": "no-such-linter --fix", "timeout": 10 },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/not-run.sh", "timeout": 5 }
+        ]
+      },
+      { "matcher": "mcp__ledger", "hooks": [{ "type": "command", "command": "echo ledger", "timeout": 5000 }] }
+    ],
+    "Stop": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "echo stopping", "timeout": 5 }] }
+    ],
+    "SessionStart": [
+      { "matcher": "startup", "hooks": [{ "type": "command", "if": "Bash(git *)", "command": "echo started", "timeout": 5 }] }
+    ]
+  }
+}

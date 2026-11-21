@@ -43,6 +43,11 @@ declare const setup: {
   // Problems: invalid JSON, hook script missing or not executable, bad matcher, `if` on an event that ignores it, rule forms Claude Code skips, MCP command not on PATH, plugin enabled but not installed, dangling mods, duplicates.
   check(o?: { folder?: string; max?: number }): { counts: { error: number; warn: number; info: number }; problems: Problem[]; cut: number; checked: Record<string, number> };
 
+  // The hooks block of each settings file that applies (user, project, local, managed when present), or of one o.file (a settings-style .json path, relative to the folder), checked one handler at a time. Reads only.
+  // Each problem has severity, scope, file and the JSON path (hooks.PreToolUse[0].hooks[1].timeout): unknown event name, a matcher on an event that takes none, a bare mcp__<server> matcher, a handler with no type or an unknown one,
+  // a timeout that is not a positive number (or looks like milliseconds), an `if` on an event that never evaluates it, a command whose script or program is missing or not executable, an http, mcp_tool, prompt or agent handler missing its field, invalid JSON.
+  validateHooks(o?: { folder?: string; file?: string; max?: number }): { folder: string; files: { scope: string; file: string; state: string; events: number; handlers: number }[]; handlersChecked: number; counts: { error: number; warn: number; info: number }; problems: { severity: "error" | "warn" | "info"; scope: string; file: string; path: string; problem: string }[]; cut: number };
+
   // The `claude` command to run for what lives only in ~/.claude.json or needs the CLI. Text only; nothing runs.
   // kind: "mcp-add" ({name, command, args, env, url, type, headers, scope}; values become <VALUE>), "mcp-remove", "plugin-install", "plugin-uninstall", "marketplace-add" ({source}).
   cli(kind: string, o?: { name?: string; id?: string; scope?: string; command?: string; args?: string[]; url?: string; type?: string; env?: Record<string, string>; headers?: Record<string, string>; source?: string }): { command: string; note?: string };
@@ -69,6 +74,6 @@ declare const setup: {
   removeMcp(o: { name: string; scope?: "project" | "user" | "local"; folder?: string }): unknown;
   // Turn an installed plugin on or off (enabledPlugins). Installing is the claude command from cli("plugin-install").
   setPlugin(o: { id: string; enabled?: boolean; scope?: "user" | "project" | "local"; folder?: string }): unknown;
-  // Run one hook command with a sample event on stdin (no shell: pipes and redirects are refused) and report exit code, output and how Claude Code reads it. Runs a program: needs act.
-  testHook(o: { event: string; command: string; args?: string[]; tool?: string; input?: object; prompt?: string; timeout?: number; folder?: string }): Promise<{ exitCode: number; stdout: string; stderr: string; decision: string | null; reading: string; ms: number }>;
+  // Run one hook command with a sample event on stdin and no shell (pipes and redirects are refused). o.input is the tool_input of PreToolUse and PostToolUse; o.fields adds or overrides any stdin field, such as stop_hook_active, tool_name, error or agent_type. It reports exit code, output and how Claude Code reads it. Runs a program: needs act.
+  testHook(o: { event: string; command: string; args?: string[]; tool?: string; input?: object; fields?: object; prompt?: string; timeout?: number; folder?: string }): Promise<{ exitCode: number; stdout: string; stderr: string; decision: string | null; reading: string; ms: number }>;
 };

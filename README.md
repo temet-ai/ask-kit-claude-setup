@@ -36,11 +36,11 @@ works in; a question that names another folder is answered there.
 
 | | |
 |---|---|
-| Scripts | `hooks` (every hook with its source and script state; with an event and a tool, the hooks that would fire and why the others would not), `permissions` (rules by list and file; with a tool call, the rule that decides it), `mcp` (servers by scope, command on PATH, env key names, approval), `plugins` (marketplaces, installed and enabled plugins and what each contributes, mods and whether they load), `settings` (the merged settings and the layer that set each key), `check` (invalid JSON, missing or non-executable hook scripts, bad matchers, rule forms Claude Code skips, MCP commands not on PATH, plugins enabled but not installed) |
-| Skills | `add-hook`, `debug-hook`, `add-permission`, `add-mcp-server`, `from-now-on`: playbooks the investigator loads when the job calls for one |
+| Scripts | `hooks` (every hook with its source and script state; with an event and a tool, the hooks that would fire and why the others would not), `permissions` (rules by list and file; with a tool call, the rule that decides it), `mcp` (servers by scope, command on PATH, env key names, approval), `plugins` (marketplaces, installed and enabled plugins and what each contributes, mods and whether they load), `settings` (the merged settings and the layer that set each key), `validate-hooks` (the hooks block of each settings file checked handler by handler: invalid JSON, unknown event names, a matcher on an event that takes none, a handler with no `type` or an unknown one, a `timeout` that is not a number, a script or program that is missing or not executable, each with the file and the JSON path), `check` (invalid JSON, missing or non-executable hook scripts, bad matchers, rule forms Claude Code skips, MCP commands not on PATH, plugins enabled but not installed) |
+| Skills | `add-hook`, `debug-hook`, `add-permission`, `add-mcp-server`, `from-now-on`, and one per hook job: `block-tool-call` (PreToolUse deny), `auto-approve-permission`, `gate-stop` (Stop, SubagentStop, TaskCompleted), `inject-context` (SessionStart, CLAUDE_ENV_FILE, PostToolUse hints), `failure-hints`, `check-after-edit`, `log-prompts`, `one-script-many-events`. Each gives the event, matcher, the exact stdin and stdout JSON and a script to save. The investigator loads one when the job calls for it |
 | Roles | `inspector` for questions about what is configured or why something fired; `configurer` for requests to change it |
 
-Each script also runs with no model: `ask-kit run claude-setup hooks event=PreToolUse tool=Bash`,
+Each script also runs with no model: `ask-kit run claude-setup hooks event=PreToolUse tool=Bash`, `ask-kit run claude-setup validate-hooks`,
 or `ask(do: "claude-setup.hooks")` from an agent.
 
 ## What it reads
@@ -75,7 +75,7 @@ every changing call is refused unless the caller asked for a change (`act`).
 
 ## How well it works
 
-`bench/questions.json` holds five questions and two script runs, put to the project folders that
+`bench/questions.json` holds five questions and three script runs, put to the project folders that
 `bench/make-fixture.sh` builds (run it first), each with patterns its answer must hold. It has not been run on a model yet; `ask-kit kit test claude-setup` runs it. The
 scripts and the changing calls were run without a model on this machine's real files and on a
 throwaway home folder.

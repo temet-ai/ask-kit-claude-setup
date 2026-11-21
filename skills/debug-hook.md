@@ -14,7 +14,9 @@ Find out why a hook did not fire, fired when it should not have, or blocks the w
    - the event has no matcher, so the one written is ignored (the hook fires on everything);
    - `disableAllHooks: true` in some file turns off user, project, local and plugin hooks;
    - the hook is in a project's settings and the folder was never trusted;
-   - the file it is in is invalid JSON (`check`), so none of it loaded;
+   - the file it is in is invalid JSON (`validate-hooks` or `check`), so none of it loaded;
+   - a handler with no `type`, a `timeout` written as a string, or an `if` on an event that never
+     evaluates it: `scripts.run("validate-hooks")` lists each with its file and JSON path;
    - the plugin that provides it is not enabled (`plugins`).
 4. A hook fires but does nothing or errors. `scripts.run("hooks", { event })` shows whether its
    script exists and may run (`SCRIPT MISSING`, `NOT EXECUTABLE`, `PROGRAM NOT ON PATH`). With act,
